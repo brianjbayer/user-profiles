@@ -1,0 +1,8 @@
+# Global gitignore
+
+# Mac
+.DS_Store
+
+# IDEs
+.idea/
+.vscode

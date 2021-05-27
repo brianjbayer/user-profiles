@@ -1,0 +1,11 @@
+FROM ubuntu:latest
+
+RUN useradd -m youser
+USER youser
+
+WORKDIR /user_configs
+COPY --chown=youser . .
+
+# Change Directory to tests to run them
+WORKDIR /user_configs/tests
+CMD bash

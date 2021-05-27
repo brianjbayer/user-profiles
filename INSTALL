@@ -1,0 +1,110 @@
+#!/bin/bash
+# If they are not present, this script interactively softlinks 
+# the user profile files in the current directory into the 
+# user's home directory.  A basic gitconfig is custom created.
+
+get-me() {
+  I=`readlink -f "$0"`
+  MYDIR="${I%/*}"
+}
+
+prompt-to-proceed () {
+  local response
+  echo ""
+  read -p "Do you wish to proceed (Press any key to continue or 'q' to quit)? " response
+  if [[ $response == 'q' ]] || [[ $response == 'Q' ]]; then
+    echo " buh-bye"
+    echo ""
+    exit
+  fi
+  echo ""
+}
+
+set-error-if-exist() {
+  local thefile=$1
+  echo " ...Checking ${thefile}..."
+  if [[ -f "${thefile}" ]]; then
+    echo "!!! ERROR: ${thefile} file already exists !!!" 1>&2
+    ((ferr++))
+  fi
+}
+
+### MAIN ###
+# get directory of this script
+get-me
+echo " >>>- INSTALLING USER PROFILES -<<<"
+echo ""
+echo " Who am I? - I am ${I} and I am from ${MYDIR}"
+echo " I will use the user config files from ${MYDIR}"
+echo " What do i do?"
+echo " This script interactively customizes and installs"
+echo " the macOS user profiles in the user's home directory..."
+echo "  1. .zshrc"
+echo "  2. .ssh/config"
+echo "  3. .gitconfig"
+echo "  4. .gitignore (global)"
+prompt-to-proceed
+
+echo " Checking if files exist..."
+ferr=0
+# Note: Do not quote the ~ character or it will not eval to home directory
+set-error-if-exist ~/.zshrc
+set-error-if-exist ~/.ssh/config
+set-error-if-exist ~/.gitconfig
+set-error-if-exist ~/.gitignore
+if [[ ferr -gt 0 ]]; then
+  exit 86
+fi
+echo ""
+
+echo " Creating Custom .gitconfig..."
+echo ""
+read -p "Please ENTER the username for your GitHub account: " ghuser
+customgitconfig="${MYDIR}/gitconfig.${ghuser}"
+set-error-if-exist "${customgitconfig}"
+if [[ ferr -gt 0 ]]; then
+  exit 86
+fi
+echo ""
+read -p "Please ENTER the email address for your GitHub account: " ghemail
+echo ""
+
+echo " Writing ${customgitconfig}..."
+cat << EOF > ${customgitconfig}
+[user]
+	name = ${ghuser}
+	email = ${ghemail}
+[core]
+	excludesfile = ~/.gitignore
+[init]
+	defaultBranch = main
+EOF
+cat ${customgitconfig}
+echo " ............................................."
+echo ""
+
+echo " Soft Linking user profiles into user's home directory..."
+echo " 1. Linking ~/.zshrc"
+ln -s "${MYDIR}/zshrc" ~/.zshrc
+
+echo " 2. Linking ~/.ssh/config"
+mkdir -p ~/.ssh
+ln -s "${MYDIR}/ssh/config" ~/.ssh/config
+
+echo " 3. Linking ${customgitconfig} to .gitconfig"
+ln -s "${customgitconfig}" ~/.gitconfig
+
+echo " 4. Linking gitignore.global to .gitignore"
+ln -s "${MYDIR}/gitignore.global" ~/.gitignore
+echo ""
+
+echo " Your user profiles should now be installed..."
+echo "" 
+
+echo " Listing Home Directory - ${HOME} ..."
+ls -al ~
+echo ""
+
+echo " Listing .ssh directory..."
+ls -al ~/.ssh
+echo ""

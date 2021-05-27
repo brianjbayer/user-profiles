@@ -1,0 +1,140 @@
+#!/bin/bash
+
+
+# Set this test script's current dirrectory
+get-me() {
+  I=`readlink -f "$0"`
+  MYDIR="${I%/*}"
+}
+
+# Set the relative pathed (assumed parent) install script to test
+get-relative-install-script() {
+  INSTALLSCRIPT="$(dirname "${MYDIR}")/INSTALL"
+  if ! [[ -f "${INSTALLSCRIPT}" ]]; then
+    echo "!!! FATAL ERROR: ${INSTALLSCRIPT} DOES NOT EXIST !!!"
+    exit 99
+  fi
+}
+
+run-and-catch() {
+  eval "$({
+    __2="$(
+    { __1="$("${@:3}")"; } 2>&1;
+    ret=$?;
+    printf '%q=%q\n' "$1" "$__1" >&2;
+    exit $ret
+    )";
+    ret="$?";
+    printf '%s=%q\n' "$2" "$__2" >&2;
+    printf '( exit %q )' "$ret" >&2;
+  } 2>&1 )";
+}
+
+clear-stdout-err() {
+  stdout=""
+  stderr=""
+}
+
+output-stdout-err() {
+  echo "STDOUT................"
+  echo "${stdout}"
+  echo "......................"
+  echo "STDERR................"
+  echo "${stderr}"
+  echo "......................"
+}
+
+assert-file-exists() {
+  local fut=$1
+  if ! [[ -f $fut ]]; then
+    echo "!!! Test FAILED: No File $fut !!!"
+    ((fails++))
+  fi
+}
+
+assert-user-profiles-exist() {
+  assert-file-exists ~/.zshrc
+  assert-file-exists ~/.ssh/config
+  assert-file-exists ~/.gitconfig
+  assert-file-exists ~/.gitignore 
+}
+
+### MAIN ###
+# This test runs in a stateful sequence as listed to minimize setup and time
+get-me
+get-relative-install-script
+
+echo ""
+echo ">>> Testing --- [${INSTALLSCRIPT}] --- <<<"
+echo " Who am I? - I am ${I} and I am from ${MYDIR}"
+echo "Test 1. Happy Path Create new profiles"
+echo "--------------------------------------"
+echo "  GIVEN user profiles do not exist"
+# This test assumes running in fresh project container with no user profiles
+clear-stdout-err
+
+echo "  WHEN ./install-user-profiles runs with user input"
+run-and-catch stdout stderr ${INSTALLSCRIPT} << EOF
+
+newuser
+newuser@happypath.com
+EOF
+exitcode=$?
+
+echo "  THEN it creates new profiles"
+assert-user-profiles-exist
+
+echo "  AND it has a zero exit code"
+if [[ $exitcode -ne 0 ]]; then
+  echo "!!! Test FAILED: Non-Zero Return Code: ${exitcode} !!!"
+  ((fails++))
+  output-stdout-err
+fi
+
+echo "  AND the user .gitconfig has GH username"
+gitconfig=$(<~/.gitconfig)
+if ! [[ $gitconfig =~ name[[:space:]]=[[:space:]]newuser ]]; then
+  echo "!!! Test FAILED: .gitconfig did not contain username !!!"
+  echo "!!! .gitconfig ..."
+  echo "${gitconfig}"
+  echo "!!! .................. !!!"
+  ((fails++))
+fi
+echo "  AND the user .gitconfig has GH email"
+if ! [[ $gitconfig =~ email[[:space:]]=[[:space:]]newuser@happypath.com ]]; then
+  echo "!!! Test FAILED: .gitconfig did not contain email !!!"
+  echo "!!! .gitconfig ..."
+  echo "${gitconfig}"
+  echo "!!! .................. !!!"
+  ((fails++))
+fi
+
+echo ""
+echo "Test 2. Gives error when user profiles already exist"
+echo "----------------------------------------------------"
+echo "  GIVEN user profiles do exist"
+assert-user-profiles-exist
+echo "  WHEN ./install-user-profiles runs with user input"
+clear-stdout-err
+run-and-catch stdout stderr ../install-user-profiles << EOF
+
+EOF
+exitcode=$?
+
+echo "  THEN returns a non-zero return code"
+if [[ $exitcode -eq 0 ]]; then
+  echo "!!! Test FAILED: Zero Return Code: ${exitcode} !!!"
+  ((fails++))
+  output-stdout-err
+fi
+
+echo ""
+echo "SUMMARY REPORT"
+echo "--------------"
+if [[ $fails -eq 0 ]]; then
+  echo "--- ALL TESTS PASSED ---"
+else
+  echo "!!! THERE WERE $fails FAILURES (SEE ABOVE OUTPUT)"
+fi
+
+exit $fails
