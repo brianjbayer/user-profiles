@@ -1,10 +1,41 @@
 #!/bin/bash
-# If they are not present, this script interactively softlinks 
-# the user profile files in the current directory into the 
+# If they are not present, this script interactively softlinks
+# the user profile files in the current directory into the
 # user's home directory.  A basic gitconfig is custom created.
 
+# MacOS does not have readlink -f to find real file names from symlinks, so this
+# "Borrowed" from...
+#  https://stackoverflow.com/questions/1055671/how-can-i-get-the-behavior-of-gnus-readlink-f-on-a-mac
+readlink-f() {
+  TARGET_FILE=$1
+
+  cd `dirname $TARGET_FILE`
+  TARGET_FILE=`basename $TARGET_FILE`
+
+  # Iterate down a (possible) chain of symlinks
+  while [ -L "$TARGET_FILE" ]
+  do
+    TARGET_FILE=`readlink $TARGET_FILE`
+    cd `dirname $TARGET_FILE`
+    TARGET_FILE=`basename $TARGET_FILE`
+  done
+
+  # Compute the canonicalized name by finding the physical path
+  # for the directory we're in and appending the target file.
+  PHYS_DIR=`pwd -P`
+  RESULT=$PHYS_DIR/$TARGET_FILE
+  echo $RESULT
+}
+
+
 get-me() {
-  I=`readlink -f "$0"`
+  I=`readlink-f "$0"`
+  # Things go bad fast if this does not determine this script and location
+  if [[ -z "$I" ]]; then
+    echo "Uh-Oh, looks like maybe there is a bug, unable to determine this script name and location"
+    echo "Exiting"
+    exit 99
+  fi
   MYDIR="${I%/*}"
 }
 
@@ -32,6 +63,7 @@ set-error-if-exist() {
 ### MAIN ###
 # get directory of this script
 get-me
+
 echo " >>>- INSTALLING USER PROFILES -<<<"
 echo ""
 echo " Who am I? - I am ${I} and I am from ${MYDIR}"
@@ -99,7 +131,7 @@ ln -s "${MYDIR}/gitignore.global" ~/.gitignore
 echo ""
 
 echo " Your user profiles should now be installed..."
-echo "" 
+echo ""
 
 echo " Listing Home Directory - ${HOME} ..."
 ls -al ~
